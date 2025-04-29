@@ -1,0 +1,21 @@
+# Ignore everything
+*
+
+!.gitignore
+
+# Documentation
+!README.md
+
+# Devcontainer setup
+!.devcontainer/
+!.devcontainer/devcontainer.json
+
+# Terraform
+!terraform/
+!terraform/*.tf
+!terraform/*.tftpl
+!terraform/*.yml
+
+# Documentation
+!doc/
+!doc/*.md
