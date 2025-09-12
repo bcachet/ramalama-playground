@@ -1,8 +1,12 @@
 {
   "name": "ai",
-  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+  "image": "ghcr.io/bcachet/containers/dev:latest",
 
   "remoteUser": "vscode",
+
+  "mounts": [
+      "source=${localWorkspaceFolder}/.devcontainer/bash_aliases,target=/home/vscode/.bash_aliases,type=bind,consistency=cached"
+  ],
 
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:2": {},

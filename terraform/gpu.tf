@@ -10,76 +10,87 @@ data "ct_config" "ollama" {
   content = yamlencode(
     {
       variant = "fcos"
-      version = "1.1.0"
+      version = "1.5.0"
       passwd = {
         users = [
-          { name                = "core"
+          {
+            name                = "core"
             ssh_authorized_keys = [var.ssh_key.public_key]
           }
         ]
       }
-      systemd = {
-        units = [
-          { name     = "ollama.service"
-            enabled  = true
-            contents = <<EOH
-            [Unit]
-            Description=Ollama
+      # systemd = {
+      #   units = [
+      #     { 
+      #       name     = "install-ramalama.service"
+      #       enabled  = true
+      #       contents = <<EOH
+      #       [Unit]
+      #       Description=Install Ramalama
+      #       Wants=network-online.target
+      #       After=network-online.target
 
-            [Service]
-            Type=simple
-            TimeoutSec=600
-            ExecStart=podman run --rm --replace --network=host --volume ollama:/root/.ollama --name ollama docker.io/ollama/ollama
-            Restart=on-failure
+      #       [Service]
+      #       Type=oneshot
+      #       ExecStart=rpm-ostree install --idempotent ramalama
+      #       ExecStart=/usr/bin/systemctl reboot
+      #       RemainAfterExit=yes
 
-            [Install]
-            WantedBy=multi-user.target
-          EOH
+      #       [Install]
+      #       WantedBy=multi-user.target
+      #     EOH
+      #     }
+      #   ]
+      # }
+      storage = {
+        files = [
+          {
+            path = "/etc/containers/systemd/ollama.container"
+            # mode = 0644
+            contents = {
+              inline = <<-EOT
+              [Container]
+              ContainerName=ollama
+              HostName=ollama
+              Image=docker.io/ollama/ollama
+              AutoUpdate=registry
+              Volume=/opt/ollama:/root/.ollama
+              PublishPort=11434:11434
+              # AddDevice=nvidia.com/gpu=all
+
+              [Unit]
+              Description=Ollama Service
+              After=network.target
+              Wants=network.target
+
+              [Service]
+              Restart=always
+
+              [Install]
+              WantedBy=multi-user.target
+              EOT
+            }
           },
           {
-            name     = "open-webui.service"
-            enabled  = true
-            contents = <<EOH
-            [Unit]
-            Description=Open Webui
-            After=ollama.service
-
-            [Service]
-            Type=simple
-            TimeoutSec=600
-            ExecStart=podman run --rm --replace --network=host --env OLLAMA_BASE_URL=http://0.0.0.0:11434 --volume open-webui:/app/backend/data --name open-webui ghcr.io/open-webui/open-webui
-            Restart=on-failure
-
-            [Install]
-            WantedBy=multi-user.target
-          EOH
-          },
-          { name     = "deepseek-coder.service"
-            enabled  = true
-            contents = <<EOH
-            [Unit]
-            Description=Deepseek model
-            After=ollama.service
-
-            [Service]
-            Type=oneshot
-            TimeoutSec=600
-            ExecStart=podman exec -ti ollama ollama pull deepseek-coder
-            Restart=on-failure
-
-            [Install]
-            WantedBy=multi-user.target
-          EOH
-        }]
+            path = "/usr/local/bin/ollama"
+            # mode = 0755
+            contents = {
+              inline = <<-EOT
+              #!/bin/bash
+              podman exec -it ollama ollama "$@"
+              EOT
+            }
+          }
+        ]
       }
     }
   )
 }
 
-resource "exoscale_compute_instance" "vault" {
+resource "exoscale_compute_instance" "ai-runner" {
   name               = "ai-runner"
   zone               = var.zone
-  type               = "gpu3.medium"
+  type               = "gpu2.medium"
   disk_size          = 100
   template_id        = data.exoscale_template.template.id
   security_group_ids = [exoscale_security_group.ai-runner.id]
@@ -99,22 +110,4 @@ resource "exoscale_security_group_rule" "ai-runner_ssh" {
   cidr              = "0.0.0.0/0"
   start_port        = 22
   end_port          = 22
-}
-
-resource "exoscale_security_group_rule" "ai-runner_api" {
-  security_group_id = exoscale_security_group.ai-runner.id
-  type              = "INGRESS"
-  protocol          = "TCP"
-  cidr              = "0.0.0.0/0"
-  start_port        = 11434
-  end_port          = 11434
-}
-
-resource "exoscale_security_group_rule" "ai-runner_ui" {
-  security_group_id = exoscale_security_group.ai-runner.id
-  type              = "INGRESS"
-  protocol          = "TCP"
-  cidr              = "0.0.0.0/0"
-  start_port        = 8080
-  end_port          = 8080
 }

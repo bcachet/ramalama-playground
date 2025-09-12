@@ -9,6 +9,10 @@
 # Devcontainer setup
 !.devcontainer/
 !.devcontainer/devcontainer.json
+!.devcontainer/bash_aliases
+
+# bootc container image
+!Containerfile
 
 # Terraform
 !terraform/
