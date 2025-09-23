@@ -56,6 +56,11 @@ exo -A prod c i create ai-runner \
   --disk-size 100
 ```
 
+## TODO
+
+- [ ] [Integration test of bootc image](https://github.com/secureblue/bootc-integration-test-action)
+
+
 ## Generating infrastructure
 > [!WARNING]
 > Terraform not in sync with bootc-image-builder approach
