@@ -59,7 +59,7 @@ exo -A prod c i create ai-runner \
 ## TODO
 
 - [ ] [Integration test of bootc image](https://github.com/secureblue/bootc-integration-test-action)
-
+- [ ] Evaluate [uCore](https://github.com/ublue-os/ucore)
 
 ## Generating infrastructure
 > [!WARNING]
