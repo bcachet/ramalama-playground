@@ -55,7 +55,9 @@ RUN dnf install -y \
 # ramalama
 # See https://ramalama.ai/
 #=================================
-RUN dnf install -y python3-ramalama
+RUN dnf install -y python3-pip
+ARG RAMALAMA_VERSION=0.12.2
+RUN pip install --root-user-action=ignore --no-cache-dir ramalama==${RAMALAMA_VERSION}
 
 ################################
 # Packages: clean up
