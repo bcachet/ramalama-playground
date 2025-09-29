@@ -3,76 +3,75 @@
 # See https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/using_image_mode_for_rhel_to_build_deploy_and_manage_operating_systems/
 ################################
 
-# Base image for bootc
 FROM quay.io/fedora/fedora-bootc:42
 
 ################################
 # Packages: installation
 ################################
-#=================================
-# cloud-init to fetch SSH keys and users from cloud provider metadata
-#=================================
-RUN dnf install -y cloud-init \ 
-      && \
-      ln -s ../cloud-init.target /usr/lib/systemd/system/default.target.wants
+# Installed packages:
+# * ramalama (https://ramalama.ai)
+# * nvidia-container-toolkit (https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
+# * NVIDIA CUDA drivers (https://docs.nvidia.com/cuda/cuda-installation-guide-linux/)
+# * dkms to build NVIDIA driver kernel modules (https://linux.die.net/man/8/dkms)
+# * cloud-init to fetch SSH keys and users from cloud provider metadata (https://cloudinit.readthedocs.io/en/latest/)
 
 #=================================
-# NVIDIA Drivers and NVIDIA Container Toolkit
+# NVIDIA cuda/container-toolkit repositories
 #=================================
-RUN <<EOF
-dnf install -y https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm
-dnf install -y https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm
-
-# Install the kernel devel and kernel header tools
-# We get the kernel that is being used in THE BASE IMAGE by doing /usr/lib/modules && echo *, then we install the kernel-devel for that kernel
-# SOMETIMES this messes up if the "base" image has an outdated kernel vs the one you get from dnf
-dnf install -y kernel-devel-$(cd /usr/lib/modules && echo *)
-
-# Install the nvidia drivers
-dnf install -y akmod-nvidia xorg-x11-drv-nvidia-cuda
-
-# Install NVIDIA container toolkit
-curl -s -L https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo | tee /etc/yum.repos.d/nvidia-container-toolkit.repo
-dnf install -y nvidia-container-toolkit
-
-# Blacklist the nouveau driver to ensure NVIDIA drivers function properly
-echo "blacklist nouveau" > /etc/modprobe.d/blacklist_nouveau.conf
-
-# See: "Kernel Open" on:
-# https://rpmfusion.org/Howto/NVIDIA?highlight=%28%5CbCategoryHowto%5Cb%29
-# Starting 515xx and above, to support the 5000 series and newer cards, the kernel needs to be "open" to allow the nvidia drivers to work when compiling with akmods.
-sh -c 'echo "%_with_kmod_nvidia_open 1" > /etc/rpm/macros.nvidia-kmod'
-
-# Add `options nvidia NVreg_OpenRmEnableUnsupportedGpus=1` to /etc/modprobe.d/nvidia.conf
-# which will enable the 5000 series GPUs to work with the nvidia drivers.
-echo "options nvidia NVreg_OpenRmEnableUnsupportedGpus=1" > /etc/modprobe.d/nvidia.conf
-EOF
-
-# Build kmods which runs on boot.
-# The reasoning for the script is that sometimes the kernel version is different on the base images vs what is actually on 
-# dnf update, so we have to "fake it till you make it" scenario.
-COPY --chmod=0755 dkms.sh /tmp
-RUN <<EOF
-dnf install -y dkms
-/tmp/dkms.sh
-EOF
-
+RUN curl -s -L https://developer.download.nvidia.com/compute/cuda/repos/fedora42/x86_64/cuda-fedora42.repo | \
+    tee /etc/yum.repos.d/cuda-fedora42.repo
+RUN curl -s -L https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo | \
+    tee /etc/yum.repos.d/nvidia-container-toolkit.repo
 
 #=================================
-# ramalama
-# See https://ramalama.ai/
+# Install packages
 #=================================
-RUN dnf install -y python3-pip
+ARG CUDA_DRIVERS_VERSION=580.82.07
+ARG NVIDIA_CONTAINER_TOOLKIT_VERSION=1.17.8
+ARG CLOUDINIT_VERSION=24.2
+ARG DKMS_VERSION=3.2.2
 ARG RAMALAMA_VERSION=0.12.2
-RUN pip install --root-user-action=ignore --no-cache-dir ramalama==${RAMALAMA_VERSION}
+RUN <<EOF
+set -euox pipefail
+dnf install -y --setopt=install_weak_deps=False \
+    cuda-drivers-${CUDA_DRIVERS_VERSION} \
+    nvidia-container-toolkit-${NVIDIA_CONTAINER_TOOLKIT_VERSION} \
+    cloud-init-${CLOUDINIT_VERSION} \
+    dkms-${DKMS_VERSION} \
+    ramalama-${RAMALAMA_VERSION}    
+dnf clean all
+rm -rf /var/cache/dnf \
+       /var/lib/dnf \
+       /var/log/*.log
+EOF
 
-################################
-# Packages: clean up
-################################
-RUN dnf clean all && \
-    rm -rf /var/cache/dnf \
-           /var/lib/dnf \
-           /var/log/*.log
+#=================================
+# NVIDIA: build kmods
+#=================================
+# Build the NVIDIA kernel modules for the kernel version installed on the filesystem.
+RUN <<EOF
+set -euox pipefail
+
+export KERNEL_VERSION=$(cd /usr/lib/modules && echo *)
+
+# Create a fake uname that only responds to -r with the kernel version we want.
+cat >/tmp/fake-uname <<EOH
+#!/usr/bin/env bash
+
+if [ "\$1" == "-r" ] ; then
+  echo ${KERNEL_VERSION}
+  exit 0
+fi
+
+exec /usr/bin/uname \$@
+EOH
+
+# Use the fake uname in PATH to build the kmods for the desired kernel version.
+install -Dm0755 /tmp/fake-uname /tmp/bin/uname
+
+PATH=/tmp/bin:$PATH dkms autoinstall -k ${KERNEL_VERSION}
+rm -f /tmp/fake-uname /tmp/bin/uname
+EOF
 
 
 ################################
@@ -106,6 +105,11 @@ WantedBy=basic.target
 
 EOF
 
-# Enable necessary services to be started at boot
+# Ensure nvidia-toolkit-firstboot to be started at boot
 RUN systemctl enable nvidia-toolkit-firstboot.service
 
+#=================================
+# cloud-init
+#=================================
+# Ensure cloud-init service to be started at boot
+RUN systemctl enable cloud-init.service
