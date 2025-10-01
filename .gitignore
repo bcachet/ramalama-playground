@@ -12,7 +12,14 @@
 !.devcontainer/bash_aliases
 
 # bootc container image
+!.containerignore
 !Containerfile
+!container/
+!container/*
+!container/*/*
+!container/*/*/*
+!container/*/*/*/*
+!container/*/*/*/*/*
 
 # Terraform
 !terraform/

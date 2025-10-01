@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -eu -o pipefail
+
+# DESCRIPTION
+#   A fake uname that only responds $KERNEL_VERSION to -r
+#   Other commands are passed to the real uname.
+
+if [ "\$1" == "-r" ] ; then
+    echo ${KERNEL_VERSION}
+    exit 0
+fi
+
+exec /usr/bin/uname $@

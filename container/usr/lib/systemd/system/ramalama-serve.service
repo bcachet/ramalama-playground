@@ -1,0 +1,12 @@
+[Unit]
+Description=Ramalama Serve Deepseek-8B Service
+After=podman.service
+Requires=podman.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/ramalama serve -p 8080 --name deepseek-8b ollama://deepseek-r1:8b
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
