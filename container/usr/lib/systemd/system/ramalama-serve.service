@@ -5,7 +5,7 @@ Requires=podman.service
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/ramalama serve -p 8080 --name deepseek-8b ollama://deepseek-r1:8b
+ExecStart=/usr/bin/ramalama serve -p 8080 --name deepseek-8b ollama://deepseek-r1:8b
 Restart=on-failure
 
 [Install]

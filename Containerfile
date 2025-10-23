@@ -24,36 +24,32 @@ ARG NVIDIA_CONTAINER_TOOLKIT_VERSION=1.17.8
 ARG CLOUDINIT_VERSION=24.2
 ARG DKMS_VERSION=3.2.2
 ARG RAMALAMA_VERSION=0.12.2
-RUN <<EOF
-set -eux -o pipefail
-dnf install -y --setopt=install_weak_deps=False \
+RUN dnf install -y --setopt=install_weak_deps=False \
     cuda-drivers-${CUDA_DRIVERS_VERSION} \
     nvidia-container-toolkit-${NVIDIA_CONTAINER_TOOLKIT_VERSION} \
     cloud-init-${CLOUDINIT_VERSION} \
     dkms-${DKMS_VERSION} \
-    ramalama-${RAMALAMA_VERSION}    
-dnf clean all
-rm -rf /var/cache/dnf \
+    ramalama-${RAMALAMA_VERSION} \ 
+    && \
+    dnf clean all \
+    && \
+    rm -rf /var/cache/dnf \
        /var/lib/dnf \
        /var/log/*.log
-EOF
 
 ################################
 # Kernel configuration
 ################################
 # Build the NVIDIA kernel modules for the kernel version installed on the filesystem
 COPY container/tmp/bin /tmp/bin
-RUN <<EOF
-set -eux -o pipefail
-export KERNEL_VERSION=$(cd /usr/lib/modules && echo *)
-PATH=/tmp/bin:$PATH dkms autoinstall -k ${KERNEL_VERSION}
-rm -rf /tmp/bin
-EOF
+RUN export KERNEL_VERSION=$(cd /usr/lib/modules && echo *) && \
+    PATH=/tmp/bin:$PATH dkms autoinstall -k ${KERNEL_VERSION} && \
+    rm -rf /tmp/bin
 
 ################################
 # Services: configuration
 ################################
-COPY container/usr/lib/systemd/system/ usr/lib/systemd/system/
+COPY container/usr/lib/systemd/system/ /usr/lib/systemd/system/
 # Ensure services to be started at boot
 RUN systemctl enable \
         nvidia-toolkit-firstboot.service \

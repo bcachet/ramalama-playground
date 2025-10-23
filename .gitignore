@@ -6,6 +6,11 @@
 # Documentation
 !README.md
 
+# CI/CD
+!.github/
+!.github/workflows/
+!.github/workflows/*.yml
+
 # Devcontainer setup
 !.devcontainer/
 !.devcontainer/devcontainer.json

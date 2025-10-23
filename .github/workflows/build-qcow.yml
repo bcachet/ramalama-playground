@@ -1,0 +1,74 @@
+name: Build QCOW Image and Upload to Exoscale
+
+on:
+  workflow_run:
+    workflows: ["Build Container Image"]
+    types:
+      - completed
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  DEFAULT_TAG: latest
+  EXOSCALE_ENDPOINT: sos-at-vie-2.exo.io
+  EXOSCALE_REGION: at-vie-2
+  EXOSCALE_BUCKET: vie2-bucket
+
+jobs:
+  build-qcow:
+    name: Build & upload QCOW image
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install podman & rclone
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y podman rclone
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build QCOW image
+        id: build-qcow
+        run: |
+          /usr/bin/sudo podman pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }} && \
+          mkdir -p output && \
+          /usr/bin/sudo podman run \
+            --rm \
+            --privileged \
+            --security-opt label=type:unconfined_t \
+            --volume /var/lib/containers/storage:/var/lib/containers/storage \
+            --volume ./output:/output \
+            quay.io/centos-bootc/bootc-image-builder:latest \
+              --rootfs ext4 \
+              --use-librepo=True \
+              --type qcow2 \
+              ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}
+
+      - name: Upload QCOW to Exoscale SOS with rclone
+        env:
+          RCLONE_CONFIG_S3_TYPE: s3
+          RCLONE_CONFIG_S3_PROVIDER: Other
+          RCLONE_CONFIG_S3_ENV_AUTH: "false"
+          RCLONE_CONFIG_S3_ACCESS_KEY_ID: ${{ secrets.EXOSCALE_KEY }}
+          RCLONE_CONFIG_S3_SECRET_ACCESS_KEY: ${{ secrets.EXOSCALE_SECRET }}
+          RCLONE_CONFIG_S3_REGION: ${{ env.EXOSCALE_REGION }}
+          RCLONE_CONFIG_S3_ENDPOINT: ${{ env.EXOSCALE_ENDPOINT }}
+        run: |
+          rclone copy \
+            ./output/qcow2/disk.qcow2 \
+            S3:${{ env.EXOSCALE_BUCKET }}/ai-runner-${{ github.sha }}.qcow2
