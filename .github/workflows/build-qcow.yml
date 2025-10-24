@@ -12,7 +12,6 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
-  DEFAULT_TAG: latest
   EXOSCALE_ENDPOINT: sos-at-vie-2.exo.io
   EXOSCALE_REGION: at-vie-2
   EXOSCALE_BUCKET: vie2-bucket
@@ -28,6 +27,15 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Determine container tag
+        id: container-tag
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+          fi
 
       - name: Install podman & rclone
         run: |
@@ -45,7 +53,7 @@ jobs:
       - name: Build QCOW image
         id: build-qcow
         run: |
-          /usr/bin/sudo podman pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }} && \
+          /usr/bin/sudo podman pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.container-tag.outputs.tag }} && \
           mkdir -p output && \
           /usr/bin/sudo podman run \
             --rm \
@@ -57,7 +65,7 @@ jobs:
               --rootfs ext4 \
               --use-librepo=True \
               --type qcow2 \
-              ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}
+              ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.container-tag.outputs.tag }}
 
       - name: Upload QCOW to Exoscale SOS with rclone
         env:
@@ -71,4 +79,4 @@ jobs:
         run: |
           rclone copy \
             ./output/qcow2/disk.qcow2 \
-            S3:${{ env.EXOSCALE_BUCKET }}/ai-runner-${{ github.sha }}.qcow2
+            S3:${{ env.EXOSCALE_BUCKET }}/${{ env.IMAGE_NAME }}-${{ steps.container-tag.outputs.tag }}.qcow2

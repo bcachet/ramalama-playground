@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+    tags:
+      - 'v*.*.*'
     paths:
       - 'Containerfile'
       - 'container/**'
@@ -22,7 +24,6 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
-  DEFAULT_TAG: latest
 
 jobs:
   build:
@@ -42,9 +43,10 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=${{ env.DEFAULT_TAG }}
-            type=sha,enable=${{ github.event_name == 'pull_request' }}
+            type=raw,value=latest
+            type=sha,enable=true,prefix=,suffix=,format=long
             type=ref,event=pr
+            type=ref,event=tag
           labels: |
             org.opencontainers.image.title=${{ env.IMAGE_NAME }}
             org.opencontainers.image.url=https://github.com/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
